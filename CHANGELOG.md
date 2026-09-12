@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A GitHub Actions release workflow that, on merge to `main`, bumps `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`, Developer ID–signs and notarizes `Spotifly.app` on `macos-26`, and publishes `Spotifly-{version}.zip` to this repository’s GitHub Releases. Homebrew cask updates stay out of the job; required secrets and Apple setup are in `docs/ci-macos-release.md`
 - A theme switch in Settings, under a new General tab: Light, Dark, or System. The choice is persisted as `appearanceMode` in defaults and applied live, no relaunch needed. Two mechanisms carry it, because neither alone covers everything: `.preferredColorScheme` on both scenes restyles the SwiftUI windows (setting `NSApp.appearance` alone demonstrably does not reach them), and `NSApp.appearance` covers what `preferredColorScheme` cannot, such as menus and alerts
 
 ### Changed

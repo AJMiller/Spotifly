@@ -79,6 +79,16 @@ Earlier versions did ask for a Client ID, because they talked to the Spotify Web
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for build instructions and architecture documentation.
 
+## Releases
+
+Merging a pull request to `main` on this fork publishes a Developer ID–signed,
+notarized `Spotifly.app` as a GitHub Release (once Apple signing secrets are
+configured). See [docs/ci-macos-release.md](docs/ci-macos-release.md) for the
+required secrets, Apple Developer setup, and versioning rules.
+
+The interactive local flow (`./release.sh` and [RELEASE.md](RELEASE.md)) still
+exists for notarizing from a Mac.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
