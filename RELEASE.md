@@ -2,6 +2,22 @@
 
 This document describes how to create and publish a new release of Spotifly.
 
+## Automated CI (this fork)
+
+On **AJMiller/Spotifly**, merging a pull request to `main` runs
+`.github/workflows/release.yml`: it bumps `MARKETING_VERSION` /
+`CURRENT_PROJECT_VERSION`, archives with `xcodebuild`, notarizes with
+`notarytool`, and publishes `Spotifly-{version}.zip` as a GitHub Release on
+this repository. Tags stay `v{MARKETING_VERSION}`.
+
+Enable it by adding the Apple secrets listed in
+[docs/ci-macos-release.md](docs/ci-macos-release.md). Until those secrets
+exist, the workflow starts on merge but skips publishing.
+
+The CI job does **not** write to `ralph/spotifly` or `ralph/homebrew-spotifly`.
+The rest of this file is the original interactive flow, which still targets
+those remotes from a local Mac.
+
 ## Prerequisites
 
 - Xcode installed and working
