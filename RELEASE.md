@@ -12,7 +12,8 @@ this repository. Tags stay `v{MARKETING_VERSION}`.
 
 Enable it by adding the Apple secrets listed in
 [docs/ci-macos-release.md](docs/ci-macos-release.md). Until those secrets
-exist, the workflow starts on merge but skips publishing.
+exist, the workflow starts on merge but skips publishing (Actions warning
+plus a job summary). A manual **Run workflow** fails if secrets are missing.
 
 The CI job does **not** write to `ralph/spotifly` or `ralph/homebrew-spotifly`.
 The rest of this file is the original interactive flow, which still targets

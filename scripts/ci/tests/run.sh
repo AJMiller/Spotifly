@@ -204,18 +204,24 @@ assert_eq "$BEFORE" "$AFTER" "existing version section is not rewritten"
 # --- create-export-options.sh --------------------------------------------
 
 PLIST="${WORKDIR}/ExportOptions.plist"
-"${CI_DIR}/create-export-options.sh" --team-id 89S4HZY343 --out "$PLIST"
-assert_file_contains "$PLIST" "<string>developer-id</string>" "export method is developer-id"
-assert_file_contains "$PLIST" "<string>89S4HZY343</string>" "export team id"
-assert_file_contains "$PLIST" "<string>automatic</string>" "no profile → automatic signing"
+if "${CI_DIR}/create-export-options.sh" --team-id 89S4HZY343 --out "$PLIST" >/dev/null 2>&1; then
+    FAIL=$((FAIL + 1))
+    printf 'not ok  export options without --profile-name should fail\n'
+else
+    PASS=$((PASS + 1))
+    printf 'ok  export options without --profile-name should fail\n'
+fi
 
 "${CI_DIR}/create-export-options.sh" \
     --team-id 89S4HZY343 \
     --out "$PLIST" \
-    --bundle-id rvdh.Spotifly \
+    --bundle-id com.ajmiller.spotifly \
     --profile-name "Spotifly Developer ID"
+assert_file_contains "$PLIST" "<string>developer-id</string>" "export method is developer-id"
+assert_file_contains "$PLIST" "<string>89S4HZY343</string>" "export team id"
 assert_file_contains "$PLIST" "<string>manual</string>" "profile → manual signing"
-assert_file_contains "$PLIST" "<key>rvdh.Spotifly</key>" "profile maps bundle id"
+assert_file_not_contains "$PLIST" "<string>automatic</string>" "no automatic signing fallback"
+assert_file_contains "$PLIST" "<key>com.ajmiller.spotifly</key>" "profile maps bundle id"
 assert_file_contains "$PLIST" "<string>Spotifly Developer ID</string>" "profile name"
 
 # --- assert-tag-free.sh --------------------------------------------------

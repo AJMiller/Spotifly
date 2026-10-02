@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>Spotifly</string>
 	<key>CFBundleIdentifier</key>
-	<string>rvdh.Spotifly</string>
+	<string>com.ajmiller.spotifly</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -29,6 +29,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>AppIdentifierPrefix</key>
+	<string>$(AppIdentifierPrefix)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.music</string>
 	<key>LSMinimumSystemVersion</key>

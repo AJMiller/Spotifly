@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# Import a Developer ID Application .p12 (and optional provisioning profile)
+# Import a Developer ID Application .p12 and Developer ID provisioning profile
 # into a throwaway keychain for xcodebuild on a GitHub Actions macOS runner.
 #
 # Required environment:
 #   APPLE_DEVELOPER_CERTIFICATE_P12_BASE64
 #   APPLE_DEVELOPER_CERTIFICATE_PASSWORD
+#   APPLE_PROVISIONING_PROFILE_BASE64
 #   RUNNER_TEMP                 (set by GitHub Actions)
 #
 # Optional:
-#   APPLE_PROVISIONING_PROFILE_BASE64
 #   KEYCHAIN_PASSWORD           (generated if unset)
 #
-# Writes KEYCHAIN_PATH, KEYCHAIN_PASSWORD, and optionally
-# PROVISIONING_PROFILE_SPECIFIER / PROVISIONING_PROFILE_PATH to GITHUB_OUTPUT
-# when that variable is set.
+# Writes KEYCHAIN_PATH, KEYCHAIN_PASSWORD, PROVISIONING_PROFILE_SPECIFIER,
+# and PROVISIONING_PROFILE_PATH to GITHUB_OUTPUT when that variable is set.
 
 set -euo pipefail
 
@@ -25,6 +24,7 @@ source "${SCRIPT_DIR}/lib.sh"
 
 [[ -n "${APPLE_DEVELOPER_CERTIFICATE_P12_BASE64:-}" ]] || ci_die "APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 is empty"
 [[ -n "${APPLE_DEVELOPER_CERTIFICATE_PASSWORD:-}" ]] || ci_die "APPLE_DEVELOPER_CERTIFICATE_PASSWORD is empty"
+[[ -n "${APPLE_PROVISIONING_PROFILE_BASE64:-}" ]] || ci_die "APPLE_PROVISIONING_PROFILE_BASE64 is empty"
 [[ -n "${RUNNER_TEMP:-}" ]] || ci_die "RUNNER_TEMP is empty"
 
 KEYCHAIN_PASSWORD="${KEYCHAIN_PASSWORD:-$(uuidgen)}"
@@ -66,24 +66,20 @@ else
     ci_die "p12 imported but no 'Developer ID Application' identity is visible. Export the Developer ID Application certificate (not Apple Development / Distribution)."
 fi
 
-PROFILE_NAME=""
-PROFILE_PATH=""
-if [[ -n "${APPLE_PROVISIONING_PROFILE_BASE64:-}" ]]; then
-    PROFILES_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
-    mkdir -p "$PROFILES_DIR"
-    RAW_PROFILE="${RUNNER_TEMP}/spotifly.provisionprofile"
-    python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["APPLE_PROVISIONING_PROFILE_BASE64"]))' >"$RAW_PROFILE"
-    [[ -s "$RAW_PROFILE" ]] || ci_die "failed to decode APPLE_PROVISIONING_PROFILE_BASE64"
+PROFILES_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
+mkdir -p "$PROFILES_DIR"
+RAW_PROFILE="${RUNNER_TEMP}/spotifly.provisionprofile"
+python3 -c 'import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ["APPLE_PROVISIONING_PROFILE_BASE64"]))' >"$RAW_PROFILE"
+[[ -s "$RAW_PROFILE" ]] || ci_die "failed to decode APPLE_PROVISIONING_PROFILE_BASE64"
 
-    PROFILE_NAME="$(security cms -D -i "$RAW_PROFILE" | plutil -extract Name raw -)"
-    PROFILE_UUID="$(security cms -D -i "$RAW_PROFILE" | plutil -extract UUID raw -)"
-    [[ -n "$PROFILE_NAME" && -n "$PROFILE_UUID" ]] || ci_die "could not read Name/UUID from the provisioning profile"
+PROFILE_NAME="$(security cms -D -i "$RAW_PROFILE" | plutil -extract Name raw -)"
+PROFILE_UUID="$(security cms -D -i "$RAW_PROFILE" | plutil -extract UUID raw -)"
+[[ -n "$PROFILE_NAME" && -n "$PROFILE_UUID" ]] || ci_die "could not read Name/UUID from the provisioning profile"
 
-    PROFILE_PATH="${PROFILES_DIR}/${PROFILE_UUID}.provisionprofile"
-    cp "$RAW_PROFILE" "$PROFILE_PATH"
-    rm -f "$RAW_PROFILE"
-    ci_log "installed provisioning profile '${PROFILE_NAME}' (${PROFILE_UUID})"
-fi
+PROFILE_PATH="${PROFILES_DIR}/${PROFILE_UUID}.provisionprofile"
+cp "$RAW_PROFILE" "$PROFILE_PATH"
+rm -f "$RAW_PROFILE"
+ci_log "installed provisioning profile '${PROFILE_NAME}' (${PROFILE_UUID})"
 
 emit() {
     printf '%s=%s\n' "$1" "$2"
@@ -91,18 +87,14 @@ emit() {
 
 emit KEYCHAIN_PATH "$KEYCHAIN_PATH"
 emit KEYCHAIN_PASSWORD "$KEYCHAIN_PASSWORD"
-if [[ -n "$PROFILE_NAME" ]]; then
-    emit PROVISIONING_PROFILE_SPECIFIER "$PROFILE_NAME"
-    emit PROVISIONING_PROFILE_PATH "$PROFILE_PATH"
-fi
+emit PROVISIONING_PROFILE_SPECIFIER "$PROFILE_NAME"
+emit PROVISIONING_PROFILE_PATH "$PROFILE_PATH"
 
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
     {
         emit KEYCHAIN_PATH "$KEYCHAIN_PATH"
         emit KEYCHAIN_PASSWORD "$KEYCHAIN_PASSWORD"
-        if [[ -n "$PROFILE_NAME" ]]; then
-            emit PROVISIONING_PROFILE_SPECIFIER "$PROFILE_NAME"
-            emit PROVISIONING_PROFILE_PATH "$PROFILE_PATH"
-        fi
+        emit PROVISIONING_PROFILE_SPECIFIER "$PROFILE_NAME"
+        emit PROVISIONING_PROFILE_PATH "$PROFILE_PATH"
     } >>"$GITHUB_OUTPUT"
 fi

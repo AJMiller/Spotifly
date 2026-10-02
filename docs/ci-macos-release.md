@@ -10,9 +10,10 @@ The workflow never needs write access to `ralph/spotifly` or
 maintainer who *does* have tap access can update Homebrew by hand.
 
 Until the secrets in this document are set, a merge to `main` still starts
-the workflow but **skips publishing** (the job succeeds with a log line
-listing what is missing). A manual **Run workflow** fails instead, so a
-deliberate release cannot silently no-op.
+the workflow but **skips publishing**. That skip is visible: the job emits a
+GitHub Actions `::warning::` and writes a job summary listing the missing
+secrets. A manual **Run workflow** fails instead, so a deliberate release
+cannot silently no-op.
 
 ## What the workflow does
 
@@ -28,8 +29,10 @@ deliberate release cannot silently no-op.
 4. Clones official [librespot](https://github.com/librespot-org/librespot)
    as a sibling of the repo checkout (`../librespot`) at the known-good
    revision recorded in `CONTRIBUTING.md` (`9c7d756` today).
-5. Archives with `xcodebuild`, exports a Developer ID app, submits it with
-   `notarytool`, staples the ticket, and zips the app with `ditto`.
+5. Selects the pinned Xcode (26.6), archives with `xcodebuild` using
+   **Manual** Developer ID signing and the uploaded provisioning profile,
+   exports the app, submits it with `notarytool`, staples the ticket, and
+   zips the app with `ditto`.
 6. Creates an annotated tag and a GitHub Release whose asset is
    `Spotifly-{version}.zip`.
 7. Pushes the version-bump commit to `main` only when that is a
@@ -70,11 +73,13 @@ commit them.
 | `APPLE_API_KEY_ID` | yes | App Store Connect API key ID (the 10-character `KEY ID`) |
 | `APPLE_API_ISSUER_ID` | yes | App Store Connect issuer UUID (Users and Access → Integrations) |
 | `APPLE_API_KEY_P8` | yes | Full PEM text of `AuthKey_<KEY_ID>.p8`, including `BEGIN`/`END` lines |
-| `APPLE_PROVISIONING_PROFILE_BASE64` | recommended | Base64 of a **Developer ID** Mac provisioning profile for `rvdh.Spotifly` |
+| `APPLE_PROVISIONING_PROFILE_BASE64` | yes | Base64 of a **Developer ID** Mac provisioning profile for `com.ajmiller.spotifly` |
+| `RELEASE_GITHUB_TOKEN` | optional | PAT used instead of `GITHUB_TOKEN` to push the `chore(release):` commit onto a protected `main` (see [Branch protection](#branch-protection-and-the-chorerelease-push)) |
 | `HOMEBREW_TAP_TOKEN` | unused | Reserved name only. This workflow does not write `ralph/homebrew-spotifly` |
 
-`GITHUB_TOKEN` (automatic) is enough to push the version tag and create
-the GitHub Release on `AJMiller/Spotifly`.
+`GITHUB_TOKEN` (automatic) is enough to create the tag and the GitHub
+Release on `AJMiller/Spotifly`. Pushing the version-bump commit to a
+protected `main` is a separate question; see below.
 
 ### Create the Developer ID certificate
 
@@ -106,18 +111,17 @@ workflow looks up `CODE_SIGN_IDENTITY=Developer ID Application`.
    - Key ID → `APPLE_API_KEY_ID`
    - Issuer ID (shown on the same page) → `APPLE_API_ISSUER_ID`
 
-Without a provisioning profile the workflow also passes this key to
-`xcodebuild -allowProvisioningUpdates` so Xcode can mint a Developer ID
-profile at archive time. That only works if the API key’s team owns the
-App ID (see bundle ID below).
+This key is used only for `notarytool`. Signing is Manual and does **not**
+ask Xcode to mint a profile.
 
-### Create a Developer ID provisioning profile (recommended)
+### Create a Developer ID provisioning profile (required)
 
-Spotifly enables App Sandbox and the Hardened Runtime, so a **Developer ID**
-Mac App profile for `rvdh.Spotifly` is the reliable signing path.
+Spotifly enables App Sandbox and the Hardened Runtime. The pipeline signs
+**only** with a **Developer ID** Mac App profile for
+`com.ajmiller.spotifly`. There is no automatic-signing fallback.
 
-1. Register the macOS App ID `rvdh.Spotifly` on the same team as the
-   certificate (Identifiers → App IDs), if it is not already there.
+1. Register the macOS App ID `com.ajmiller.spotifly` on the same team as
+   the certificate (Identifiers → App IDs).
 2. Create a **Developer ID** profile for that App ID, download the
    `.provisionprofile`.
 3. Encode it:
@@ -128,30 +132,63 @@ Mac App profile for `rvdh.Spotifly` is the reliable signing path.
 
    Paste into `APPLE_PROVISIONING_PROFILE_BASE64`.
 
-If this secret is unset, the workflow falls back to automatic signing with
-the API key. Prefer shipping the profile so archive does not depend on
-Xcode creating one on the runner.
+If this secret is missing, a merge to `main` soft-skips publishing (warning
++ job summary). **Run workflow** fails.
 
 ### Team ID and bundle identifier
 
-The Xcode project still has `PRODUCT_BUNDLE_IDENTIFIER = rvdh.Spotifly` and
-a checked-in `DEVELOPMENT_TEAM`. CI **overrides** `DEVELOPMENT_TEAM` with
-`APPLE_TEAM_ID`.
+The app’s bundle ID is `com.ajmiller.spotifly` (`PRODUCT_BUNDLE_IDENTIFIER`
+in the Xcode project, `CFBundleIdentifier` in `Spotifly/Info.plist`). CI
+uses the same value via `PRODUCT_BUNDLE_IDENTIFIER` in the workflow `env`
+block and **overrides** `DEVELOPMENT_TEAM` with `APPLE_TEAM_ID`.
 
-Bundle IDs are globally unique. If your Apple team is not the team that
-already owns `rvdh.Spotifly`, Apple will not let you create a matching
-Developer ID profile. In that case you must change the bundle ID in the
-Xcode project (and the App ID on developer.apple.com) before this pipeline
-can sign a sandboxed build. That project change is outside this workflow.
+Register that App ID on *your* Apple team and issue the Developer ID
+profile against it. The checked-in `DEVELOPMENT_TEAM` is only a local
+Xcode default; the runner never uses it for the release archive.
+
+Keychain access still uses the group `$(AppIdentifierPrefix)com.spotifly.keychain`
+from `Spotifly.entitlements`. `KeychainManager` reads `AppIdentifierPrefix`
+from Info.plist so the team prefix matches the signed build.
+
+## Branch protection and the `chore(release):` push
+
+After a successful notarization the workflow commits
+`chore(release): vX.Y.Z` (version + changelog) and, when `main` has not
+moved, pushes that commit with the checkout token.
+
+**`GITHUB_TOKEN` cannot push to a protected `main`** that requires a pull
+request, required reviewers, or required status checks — unless the
+ruleset explicitly lets GitHub Actions through. A rejected push does **not**
+roll back the GitHub Release: the `v*` tag still points at the commit that
+was built, and the next release increments from `max(project, tags)`.
+
+Pick one of these if you want the version bump to land on `main`
+automatically:
+
+1. **Allow the Actions bot to bypass** (simplest if you trust this
+   workflow). In the `main` ruleset, add **Bypass list** entries for
+   `github-actions[bot]` (and/or the GitHub Actions app). Keep “Do not
+   allow bypassing the above settings” **off** for those actors.
+2. **Dedicated PAT.** Create a fine-grained personal access token (or a
+   machine-user PAT) with **Contents: Read and write** on this repository,
+   belonging to an account that is allowed to push to `main`. Store it as
+   `RELEASE_GITHUB_TOKEN`. The workflow’s `actions/checkout` uses that
+   token when the secret is set, otherwise `github.token`.
+3. **Leave `main` unprotected for this**, or accept tag-only versioning
+   when the push is rejected.
+
+Do **not** grant the PAT more than Contents write on this repo. Do not
+commit the token.
 
 ## Runner and tools
 
 | Piece | Value |
 | --- | --- |
-| Runner | `macos-26` (Apple Silicon). Default Xcode on that image is 26.6+, which matches `DEVELOPMENT.md`. |
+| Runner | `macos-26` (Apple Silicon) |
+| Xcode | Pinned to `/Applications/Xcode_26.6.app` (`xcode-select`). Matches `DEVELOPMENT.md` (Xcode 26.6+). Change `XCODE_APP` in `.github/workflows/release.yml` when you intend to move. |
 | Rust | `stable` plus `aarch64-apple-darwin` |
 | librespot | Sibling clone at `LIBRESPOT_REF` (see the `env` block in `.github/workflows/release.yml`) |
-| Signing | Temporary keychain, deleted at the end of the job |
+| Signing | Temporary keychain + installed Developer ID profile; Manual `CODE_SIGN_STYLE` only |
 | Zip | `ditto -c -k --keepParent` so AppleDouble / resource forks survive |
 
 To pin a newer known-good librespot revision, change `LIBRESPOT_REF` in the
@@ -159,13 +196,15 @@ workflow (and `CONTRIBUTING.md`).
 
 ## Enabling the pipeline (maintainer checklist)
 
-1. Create the Apple artifacts above.
+1. Create the Apple artifacts above, including a Developer ID profile for
+   `com.ajmiller.spotifly`.
 2. Add every **required** secret on `AJMiller/Spotifly`.
 3. Confirm **Settings → Actions → General** allows GitHub Actions and that
    the workflow has permission to create releases (`contents: write` is set
    in the YAML; the repo must not block that).
-4. Merge a pull request to `main`, or run **Release** from the Actions tab.
-5. Confirm the new `v*` tag and the ZIP on
+4. If `main` is protected, apply one of the [branch-protection](#branch-protection-and-the-chorerelease-push) options.
+5. Merge a pull request to `main`, or run **Release** from the Actions tab.
+6. Confirm the new `v*` tag and the ZIP on
    `https://github.com/AJMiller/Spotifly/releases`.
 
 ## What this fork does not do

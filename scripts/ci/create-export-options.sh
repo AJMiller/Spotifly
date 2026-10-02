@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# Write an ExportOptions.plist for Developer ID export.
+# Write an ExportOptions.plist for Developer ID export (Manual signing only).
 #
 # Usage:
-#   create-export-options.sh --team-id TEAM --out PATH
-#       [--bundle-id rvdh.Spotifly] [--profile-name NAME]
-#
-# If --profile-name is omitted, signingStyle is automatic (xcodebuild must be
-# given -allowProvisioningUpdates and an App Store Connect API key).
+#   create-export-options.sh --team-id TEAM --out PATH --profile-name NAME
+#       [--bundle-id com.ajmiller.spotifly]
 
 set -euo pipefail
 
@@ -16,7 +13,7 @@ source "${SCRIPT_DIR}/lib.sh"
 
 TEAM_ID=""
 OUT=""
-BUNDLE_ID="rvdh.Spotifly"
+BUNDLE_ID="com.ajmiller.spotifly"
 PROFILE_NAME=""
 
 while [[ $# -gt 0 ]]; do
@@ -45,24 +42,7 @@ done
 
 [[ -n "$TEAM_ID" ]] || ci_die "--team-id is required"
 [[ -n "$OUT" ]] || ci_die "--out is required"
-
-if [[ -n "$PROFILE_NAME" ]]; then
-    SIGNING_STYLE="manual"
-    PROFILE_XML=$(
-        cat <<EOF
-	<key>signingCertificate</key>
-	<string>Developer ID Application</string>
-	<key>provisioningProfiles</key>
-	<dict>
-		<key>${BUNDLE_ID}</key>
-		<string>${PROFILE_NAME}</string>
-	</dict>
-EOF
-    )
-else
-    SIGNING_STYLE="automatic"
-    PROFILE_XML=""
-fi
+[[ -n "$PROFILE_NAME" ]] || ci_die "--profile-name is required (Manual Developer ID signing only; automatic profile minting is not supported)"
 
 cat >"$OUT" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -74,12 +54,18 @@ cat >"$OUT" <<EOF
 	<key>teamID</key>
 	<string>${TEAM_ID}</string>
 	<key>signingStyle</key>
-	<string>${SIGNING_STYLE}</string>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Developer ID Application</string>
 	<key>destination</key>
 	<string>export</string>
-${PROFILE_XML}
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>${BUNDLE_ID}</key>
+		<string>${PROFILE_NAME}</string>
+	</dict>
 </dict>
 </plist>
 EOF
 
-ci_log "wrote Developer ID export options (${SIGNING_STYLE}) to $OUT"
+ci_log "wrote Developer ID export options (manual) to $OUT"
