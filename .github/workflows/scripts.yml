@@ -1,0 +1,27 @@
+# Cheap checks for the release helper scripts. These run on Linux and do not
+# archive, sign, or notarize the app.
+
+name: Scripts
+
+on:
+  pull_request:
+    paths:
+      - "scripts/ci/**"
+      - ".github/workflows/scripts.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/ci/**"
+      - ".github/workflows/scripts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: CI helper tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run script tests
+        run: scripts/ci/tests/run.sh

@@ -10,9 +10,14 @@ import Security
 
 /// Manages secure storage of authentication tokens in the Keychain
 nonisolated enum KeychainManager {
-    /// Shared keychain access group - allows both dev and release builds to access the same items
-    /// Format: TeamID.groupName (must match keychain-access-groups in entitlements)
-    private static let accessGroup = "89S4HZY343.com.spotifly.keychain"
+    /// Shared keychain access group — must match `keychain-access-groups` in entitlements.
+    /// Format: TeamID.groupName. The prefix comes from the signed team's
+    /// `$(AppIdentifierPrefix)` (see Info.plist), not a hardcoded team id, so a
+    /// Developer ID build on `com.ajmiller.spotifly` can read the group.
+    private static let accessGroup: String = {
+        let prefix = Bundle.main.object(forInfoDictionaryKey: "AppIdentifierPrefix") as? String ?? ""
+        return "\(prefix)com.spotifly.keychain"
+    }()
 
     // MARK: - The dashboard grant, which no longer exists
 
